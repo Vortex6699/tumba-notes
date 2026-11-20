@@ -12,6 +12,9 @@ interface NoteDao {
     @Query("SELECT * FROM notes ORDER BY updatedAt DESC")
     fun getAllNotes(): Flow<List<NoteEntity>>
 
+    @Query("SELECT * FROM notes ORDER BY updatedAt DESC")
+    suspend fun getNotesSync(): List<NoteEntity>
+
     @Query("SELECT * FROM notes WHERE id = :id")
     suspend fun getNoteById(id: String): NoteEntity?
 
@@ -35,6 +38,12 @@ interface NoteDao {
 
     @Query("DELETE FROM notes WHERE id = :id")
     suspend fun deleteNoteById(id: String)
+
+    @Query("UPDATE notes SET reminderAt = :reminderAt WHERE id = :noteId")
+    suspend fun updateReminder(noteId: String, reminderAt: Long?)
+
+    @Query("SELECT * FROM notes WHERE reminderAt IS NOT NULL AND reminderAt > :now AND inTrash = 0 ORDER BY reminderAt ASC")
+    fun getNotesWithReminders(now: Long): Flow<List<NoteEntity>>
 
     @Query("DELETE FROM notes WHERE id IN (:ids)")
     suspend fun deleteNotesByIds(ids: List<String>)

@@ -1,5 +1,9 @@
 package com.example
 
+import android.Manifest
+import android.content.Intent
+import android.content.pm.PackageManager
+import android.os.Build
 import android.os.Bundle
 import android.widget.Toast
 import androidx.activity.ComponentActivity
@@ -18,6 +22,7 @@ import androidx.compose.material3.ModalNavigationDrawer
 import androidx.compose.material3.Scaffold
 import androidx.compose.material3.rememberDrawerState
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
@@ -25,8 +30,10 @@ import androidx.compose.runtime.rememberCoroutineScope
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.platform.LocalContext
+import androidx.core.content.ContextCompat
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import com.example.data.model.Folder
+import com.example.data.model.Note
 import com.example.data.model.Tag
 import com.example.data.model.ViewSection
 import com.example.ui.components.TumbaNavigationDrawer
@@ -40,6 +47,8 @@ import com.example.ui.screens.KnowledgeGraphScreen
 import com.example.ui.screens.NoteEditorScreen
 import com.example.ui.screens.NoteListScreen
 import com.example.ui.screens.ProfileDialog
+import com.example.ui.screens.ReminderDialog
+import com.example.ui.screens.RemindersScreen
 import com.example.ui.screens.SearchDialog
 import com.example.ui.screens.SettingsDialog
 import com.example.ui.screens.TagDialog
@@ -54,9 +63,13 @@ class MainActivity : ComponentActivity() {
 
     private val viewModel: TumbaViewModel by viewModels()
 
+    // Set from a reminder notification or from an already-running activity.
+    private var launchNoteId by mutableStateOf<String?>(null)
+
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
         enableEdgeToEdge()
+        launchNoteId = intent?.getStringExtra(NOTIFICATION_NOTE_ID)
         setContent {
             val settings by viewModel.settings.collectAsStateWithLifecycle()
 
@@ -65,16 +78,47 @@ class MainActivity : ComponentActivity() {
                 accentName = settings.accent,
                 language = settings.language
             ) {
-                TumbaApp(viewModel = viewModel)
+                TumbaApp(viewModel = viewModel, initialNoteId = launchNoteId)
             }
         }
+    }
+
+    override fun onNewIntent(intent: Intent) {
+        super.onNewIntent(intent)
+        setIntent(intent)
+        launchNoteId = intent.getStringExtra(NOTIFICATION_NOTE_ID)
+    }
+
+    companion object {
+        const val NOTIFICATION_NOTE_ID = "extra_note_id"
     }
 }
 
 @Composable
-fun TumbaApp(viewModel: TumbaViewModel) {
+fun TumbaApp(viewModel: TumbaViewModel, initialNoteId: String? = null) {
     val context = LocalContext.current
+
+    // Android 13+ requires an explicit runtime grant for notifications. Reminders work
+    // offline either way; without the grant the alarm fires but nothing is displayed.
+    val notifPermissionLauncher = rememberLauncherForActivityResult(
+        contract = ActivityResultContracts.RequestPermission()
+    ) { }
+    LaunchedEffect(Unit) {
+        viewModel.rescheduleAllReminders()
+        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.TIRAMISU &&
+            ContextCompat.checkSelfPermission(context, Manifest.permission.POST_NOTIFICATIONS) !=
+            PackageManager.PERMISSION_GRANTED
+        ) {
+            notifPermissionLauncher.launch(Manifest.permission.POST_NOTIFICATIONS)
+        }
+    }
+    // Opening the app from a reminder notification jumps straight to its note.
+    LaunchedEffect(initialNoteId) {
+        if (!initialNoteId.isNullOrBlank()) viewModel.selectNote(initialNoteId)
+    }
+
     val notes by viewModel.notes.collectAsStateWithLifecycle()
+    val remindersNotes by viewModel.remindersNotes.collectAsStateWithLifecycle()
     val folders by viewModel.folders.collectAsStateWithLifecycle()
     val tags by viewModel.tags.collectAsStateWithLifecycle()
     val noteTagsMap by viewModel.noteTagsMap.collectAsStateWithLifecycle()
@@ -107,6 +151,7 @@ fun TumbaApp(viewModel: TumbaViewModel) {
 
     val drawerState = rememberDrawerState(initialValue = DrawerValue.Closed)
     val scope = rememberCoroutineScope()
+    var reminderEditTarget by remember { mutableStateOf<Note?>(null) }
 
     val selectedFolder = folders.find { it.id == selectedFolderId }
     val selectedTag = tags.find { it.id == selectedTagId }
@@ -152,8 +197,8 @@ fun TumbaApp(viewModel: TumbaViewModel) {
         scope.launch { drawerState.close() }
     }
 
-    // From the notes section, system back returns to the home dashboard.
-    BackHandler(enabled = drawerState.isClosed && mobileViewMode == "list") {
+    // From the notes or reminders section, system back returns to the home dashboard.
+    BackHandler(enabled = drawerState.isClosed && (mobileViewMode == "list" || mobileViewMode == "reminders")) {
         viewModel.selectSection(ViewSection.HOME)
     }
 
@@ -221,7 +266,11 @@ fun TumbaApp(viewModel: TumbaViewModel) {
                             onOpenSearch = { viewModel.openSearch() },
                             onOpenDrawer = {
                                 scope.launch { drawerState.open() }
-                            }
+                            },
+                            reminderCount = remindersNotes.count {
+                                !it.inTrash && (it.reminderAt ?: 0L) > System.currentTimeMillis()
+                            },
+                            onOpenReminders = { viewModel.selectSection(ViewSection.REMINDERS) }
                         )
                     }
 
@@ -280,6 +329,19 @@ fun TumbaApp(viewModel: TumbaViewModel) {
                             onOpenDrawer = {
                                 scope.launch { drawerState.open() }
                             }
+                        )
+                    }
+
+                    "reminders" -> {
+                        RemindersScreen(
+                            reminders = remindersNotes,
+                            onOpenNote = { nId -> viewModel.selectNote(nId) },
+                            onNewNote = { viewModel.createNewNote() },
+                            onOpenDrawer = {
+                                scope.launch { drawerState.open() }
+                            },
+                            onEditReminder = { note -> reminderEditTarget = note },
+                            onRemoveReminder = { note -> viewModel.clearReminder(note.id) }
                         )
                     }
 
@@ -384,13 +446,33 @@ fun TumbaApp(viewModel: TumbaViewModel) {
                                 )
                             },
                             onDeleteAttachment = { att -> viewModel.deleteAttachment(att) },
-                            onOpenLinkedNote = { title -> viewModel.openNoteByTitle(title) }
+                            onOpenLinkedNote = { title -> viewModel.openNoteByTitle(title) },
+                            onSetReminder = { nId, time -> viewModel.setReminder(nId, time) },
+                            onClearReminder = { nId -> viewModel.clearReminder(nId) }
                         )
                     }
                 }
             }
         }
         }
+
+    // Reminder editor for the Reminders screen
+    val reminderTarget = reminderEditTarget
+    if (reminderTarget != null) {
+        ReminderDialog(
+            isOpen = true,
+            initialTime = reminderTarget.reminderAt,
+            onDismiss = { reminderEditTarget = null },
+            onConfirm = { time ->
+                viewModel.setReminder(reminderTarget.id, time)
+                reminderEditTarget = null
+            },
+            onRemove = {
+                viewModel.clearReminder(reminderTarget.id)
+                reminderEditTarget = null
+            }
+        )
+    }
 
     // Omni Search Dialog
     SearchDialog(

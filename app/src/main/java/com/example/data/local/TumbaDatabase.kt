@@ -24,7 +24,7 @@ import kotlinx.coroutines.launch
         JournalEntryEntity::class,
         SearchHistoryEntity::class
     ],
-    version = 3,
+    version = 4,
     exportSchema = true
 )
 abstract class TumbaDatabase : RoomDatabase() {
@@ -154,6 +154,12 @@ abstract class TumbaDatabase : RoomDatabase() {
             }
         }
 
+        val MIGRATION_3_4 = object : Migration(3, 4) {
+            override fun migrate(db: SupportSQLiteDatabase) {
+                db.execSQL("ALTER TABLE `notes` ADD COLUMN `reminderAt` INTEGER DEFAULT NULL")
+            }
+        }
+
         fun getDatabase(context: Context, scope: CoroutineScope): TumbaDatabase {
             return INSTANCE ?: synchronized(this) {
                 val instance = Room.databaseBuilder(
@@ -161,7 +167,7 @@ abstract class TumbaDatabase : RoomDatabase() {
                     TumbaDatabase::class.java,
                     "tumba_notes.db"
                 )
-                    .addMigrations(MIGRATION_1_2, MIGRATION_2_3)
+                    .addMigrations(MIGRATION_1_2, MIGRATION_2_3, MIGRATION_3_4)
                     .addCallback(TumbaDatabaseCallback(scope))
                     .build()
                 INSTANCE = instance

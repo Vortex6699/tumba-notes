@@ -103,6 +103,28 @@ class TumbaRepository(private val db: TumbaDatabase) {
         }
     }
 
+    fun getNotesWithReminders(): Flow<List<Note>> {
+        return db.noteDao().getNotesWithReminders(System.currentTimeMillis()).map { list ->
+            list.map { it.toDomain() }
+        }
+    }
+
+    suspend fun getNote(noteId: String): Note? = withContext(Dispatchers.IO) {
+        db.noteDao().getNoteById(noteId)?.toDomain()
+    }
+
+    suspend fun getAllNotesOnce(): List<Note> = withContext(Dispatchers.IO) {
+        db.noteDao().getNotesSync().map { it.toDomain() }
+    }
+
+    suspend fun setReminder(noteId: String, reminderAt: Long?) = withContext(Dispatchers.IO) {
+        db.noteDao().updateReminder(noteId, reminderAt)
+    }
+
+    suspend fun clearReminder(noteId: String) = withContext(Dispatchers.IO) {
+        db.noteDao().updateReminder(noteId, null)
+    }
+
     fun getAttachmentsForNote(noteId: String): Flow<List<Attachment>> {
         return db.attachmentDao().getAttachmentsForNote(noteId).map { list ->
             list.map { it.toDomain() }

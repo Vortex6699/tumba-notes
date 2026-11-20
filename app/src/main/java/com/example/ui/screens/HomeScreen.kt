@@ -1,8 +1,12 @@
 package com.example.ui.screens
 
+import androidx.compose.animation.core.animateFloatAsState
+import androidx.compose.animation.core.spring
 import androidx.compose.foundation.background
 import androidx.compose.foundation.border
 import androidx.compose.foundation.clickable
+import androidx.compose.foundation.interaction.MutableInteractionSource
+import androidx.compose.foundation.interaction.collectIsPressedAsState
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
@@ -25,17 +29,17 @@ import androidx.compose.material.icons.filled.Add
 import androidx.compose.material.icons.filled.Archive
 import androidx.compose.material.icons.filled.CreateNewFolder
 import androidx.compose.material.icons.filled.Delete
+import androidx.compose.material.icons.filled.Description
 import androidx.compose.material.icons.filled.Folder
 import androidx.compose.material.icons.filled.Menu
 import androidx.compose.material.icons.filled.MoreVert
+import androidx.compose.material.icons.filled.NotificationsActive
 import androidx.compose.material.icons.filled.PushPin
 import androidx.compose.material.icons.filled.Search
 import androidx.compose.material.icons.filled.Star
 import androidx.compose.material.icons.outlined.Star
 import androidx.compose.material3.DropdownMenu
 import androidx.compose.material3.DropdownMenuItem
-import androidx.compose.material3.FloatingActionButton
-import androidx.compose.material3.HorizontalDivider
 import androidx.compose.material3.Icon
 import androidx.compose.material3.IconButton
 import androidx.compose.material3.Text
@@ -47,6 +51,9 @@ import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
+import androidx.compose.ui.draw.scale
+import androidx.compose.ui.draw.shadow
+import androidx.compose.ui.graphics.Brush
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.layout.ContentScale
 import androidx.compose.ui.platform.testTag
@@ -59,15 +66,18 @@ import coil.compose.AsyncImage
 import com.example.data.model.Folder
 import com.example.data.model.Note
 import com.example.data.model.Tag
+import com.example.ui.components.TumbaLogo
+import com.example.ui.components.TumbaSectionLabel
 import com.example.ui.theme.LocalTumbaColors
 import com.example.ui.theme.LocalTumbaStrings
+import com.example.utils.NoteColorHelper
 import com.example.utils.TextFormatUtils
 import java.io.File
 
 /**
- * Home dashboard: quick access to folders plus a chronological history of notes.
- * The notes themselves live in the separate "All notes" section, so this screen is
- * only about orientation and returning to recent work.
+ * Home dashboard: a branded hero, quick access to folders and a chronological
+ * history of notes. The notes themselves live in the separate "All notes"
+ * section, so this screen is only about orientation and returning to recent work.
  */
 @Composable
 fun HomeScreen(
@@ -90,6 +100,8 @@ fun HomeScreen(
     onOpenProfile: () -> Unit,
     onOpenSearch: () -> Unit,
     onOpenDrawer: () -> Unit,
+    reminderCount: Int = 0,
+    onOpenReminders: () -> Unit = {},
     modifier: Modifier = Modifier
 ) {
     val colors = LocalTumbaColors.current
@@ -134,20 +146,30 @@ fun HomeScreen(
                 onOpenDrawer = onOpenDrawer
             )
 
-            HorizontalDivider(color = colors.borderColor, thickness = 0.8.dp)
-
             LazyColumn(
                 modifier = Modifier.fillMaxSize(),
-                contentPadding = PaddingValues(bottom = 96.dp),
+                contentPadding = PaddingValues(bottom = 100.dp),
                 verticalArrangement = Arrangement.spacedBy(2.dp)
             ) {
                 item(key = "folders_header") {
-                    SectionHeader(
-                        title = strings.folders.uppercase(),
-                        actionLabel = strings.viewAll,
-                        onAction = onOpenFolders,
-                        modifier = Modifier.padding(start = 14.dp, end = 8.dp, top = 14.dp, bottom = 6.dp)
-                    )
+                    Row(
+                        modifier = Modifier
+                            .fillMaxWidth()
+                            .padding(start = 14.dp, end = 8.dp, top = 14.dp, bottom = 6.dp),
+                        verticalAlignment = Alignment.CenterVertically
+                    ) {
+                        TumbaSectionLabel(text = strings.folders, modifier = Modifier.weight(1f))
+                        Text(
+                            text = strings.viewAll,
+                            fontSize = 10.5.sp,
+                            fontWeight = FontWeight.Bold,
+                            color = colors.accent,
+                            modifier = Modifier
+                                .clip(RoundedCornerShape(8.dp))
+                                .clickable(onClick = onOpenFolders)
+                                .padding(horizontal = 8.dp, vertical = 4.dp)
+                        )
+                    }
                 }
 
                 item(key = "folders_row") {
@@ -170,12 +192,24 @@ fun HomeScreen(
                 }
 
                 item(key = "history_header") {
-                    SectionHeader(
-                        title = strings.noteHistory.uppercase(),
-                        actionLabel = strings.viewAll,
-                        onAction = onOpenAllNotes,
-                        modifier = Modifier.padding(start = 14.dp, end = 8.dp, top = 18.dp, bottom = 6.dp)
-                    )
+                    Row(
+                        modifier = Modifier
+                            .fillMaxWidth()
+                            .padding(start = 14.dp, end = 8.dp, top = 18.dp, bottom = 6.dp),
+                        verticalAlignment = Alignment.CenterVertically
+                    ) {
+                        TumbaSectionLabel(text = strings.noteHistory, modifier = Modifier.weight(1f))
+                        Text(
+                            text = strings.viewAll,
+                            fontSize = 10.5.sp,
+                            fontWeight = FontWeight.Bold,
+                            color = colors.accent,
+                            modifier = Modifier
+                                .clip(RoundedCornerShape(8.dp))
+                                .clickable(onClick = onOpenAllNotes)
+                                .padding(horizontal = 8.dp, vertical = 4.dp)
+                        )
+                    }
                 }
 
                 if (activeNotes.isEmpty()) {
@@ -192,12 +226,11 @@ fun HomeScreen(
                             }
                             Text(
                                 text = label.uppercase(),
-                                fontSize = 10.sp,
+                                fontSize = 9.5.sp,
                                 fontWeight = FontWeight.Bold,
-                                fontFamily = FontFamily.Monospace,
                                 color = colors.textMuted,
-                                letterSpacing = 1.sp,
-                                modifier = Modifier.padding(start = 14.dp, top = 8.dp, bottom = 4.dp)
+                                letterSpacing = 1.3.sp,
+                                modifier = Modifier.padding(start = 16.dp, top = 10.dp, bottom = 4.dp)
                             )
                         }
                         items(dayNotes, key = { it.id }) { note ->
@@ -219,20 +252,41 @@ fun HomeScreen(
             }
         }
 
-        FloatingActionButton(
-            onClick = onNewNote,
+        // Gradient floating action button with a soft glow.
+        val fabInteraction = remember { MutableInteractionSource() }
+        val fabPressed by fabInteraction.collectIsPressedAsState()
+        val fabScale by animateFloatAsState(
+            targetValue = if (fabPressed) 0.93f else 1f,
+            animationSpec = spring(stiffness = 700f, dampingRatio = 0.6f),
+            label = "fab"
+        )
+        Box(
             modifier = Modifier
                 .align(Alignment.BottomEnd)
                 .padding(20.dp)
+                .scale(fabScale)
+                .shadow(
+                    elevation = 18.dp,
+                    shape = RoundedCornerShape(20.dp),
+                    ambientColor = colors.accent.copy(alpha = 0.6f),
+                    spotColor = colors.accent.copy(alpha = 0.7f)
+                )
+                .size(58.dp)
+                .clip(RoundedCornerShape(20.dp))
+                .background(colors.brandBrush)
+                .clickable(
+                    interactionSource = fabInteraction,
+                    indication = null,
+                    onClick = onNewNote
+                )
                 .testTag("home_fab_new_note"),
-            containerColor = colors.textPrimary,
-            contentColor = colors.bgMain,
-            shape = CircleShape
+            contentAlignment = Alignment.Center
         ) {
             Icon(
                 imageVector = Icons.Default.Add,
                 contentDescription = strings.newNote,
-                modifier = Modifier.size(26.dp)
+                tint = if (colors.isLight) Color.White else colors.bgMain,
+                modifier = Modifier.size(27.dp)
             )
         }
     }
@@ -253,7 +307,7 @@ private fun HomeTopBar(
         modifier = Modifier
             .fillMaxWidth()
             .background(colors.bgSidebar)
-            .padding(start = 14.dp, end = 6.dp, top = 8.dp, bottom = 8.dp),
+            .padding(start = 8.dp, end = 8.dp, top = 8.dp, bottom = 8.dp),
         verticalAlignment = Alignment.CenterVertically
     ) {
         IconButton(
@@ -270,19 +324,22 @@ private fun HomeTopBar(
             )
         }
 
+        TumbaLogo(size = 30.dp, cornerRadius = 9.dp)
+        Spacer(modifier = Modifier.width(9.dp))
+
         Column(modifier = Modifier.weight(1f)) {
             Text(
                 text = "TUMBA NOTES",
-                fontSize = 15.sp,
-                fontWeight = FontWeight.Bold,
-                letterSpacing = 0.6.sp,
+                fontSize = 13.sp,
+                fontWeight = FontWeight.Black,
+                letterSpacing = 1.6.sp,
                 color = colors.textPrimary,
                 maxLines = 1,
                 overflow = TextOverflow.Ellipsis
             )
             Text(
                 text = profileNickname.ifBlank { strings.personalKnowledgeBase },
-                fontSize = 10.5.sp,
+                fontSize = 10.sp,
                 color = colors.textSecondary,
                 maxLines = 1,
                 overflow = TextOverflow.Ellipsis
@@ -308,7 +365,7 @@ private fun HomeTopBar(
                 .size(32.dp)
                 .clip(CircleShape)
                 .background(colors.bgElevated)
-                .border(1.dp, colors.accent.copy(alpha = 0.6f), CircleShape)
+                .border(1.2.dp, colors.accent.copy(alpha = 0.7f), CircleShape)
                 .clickable(onClick = onOpenProfile)
                 .testTag("home_avatar_button"),
             contentAlignment = Alignment.Center
@@ -329,46 +386,53 @@ private fun HomeTopBar(
                     text = initial,
                     fontSize = 12.sp,
                     fontWeight = FontWeight.Bold,
-                    color = colors.textPrimary,
-                    fontFamily = FontFamily.Monospace
+                    color = colors.textPrimary
                 )
             }
         }
-
     }
 }
 
 @Composable
-private fun SectionHeader(
-    title: String,
-    actionLabel: String,
-    onAction: () -> Unit,
+private fun GradientAction(
+    label: String,
+    icon: androidx.compose.ui.graphics.vector.ImageVector,
+    onClick: () -> Unit,
     modifier: Modifier = Modifier
 ) {
     val colors = LocalTumbaColors.current
-
+    val interaction = remember { MutableInteractionSource() }
+    val pressed by interaction.collectIsPressedAsState()
+    val scale by animateFloatAsState(
+        targetValue = if (pressed) 0.97f else 1f,
+        animationSpec = spring(stiffness = 900f, dampingRatio = 0.7f),
+        label = "action"
+    )
     Row(
-        modifier = modifier.fillMaxWidth(),
-        verticalAlignment = Alignment.CenterVertically
+        modifier = modifier
+            .height(42.dp)
+            .scale(scale)
+            .clip(RoundedCornerShape(13.dp))
+            .background(colors.brandBrush)
+            .clickable(interactionSource = interaction, indication = null, onClick = onClick)
+            .padding(horizontal = 12.dp),
+        verticalAlignment = Alignment.CenterVertically,
+        horizontalArrangement = Arrangement.Center
     ) {
-        Text(
-            text = title,
-            fontSize = 10.sp,
-            fontWeight = FontWeight.Bold,
-            fontFamily = FontFamily.Monospace,
-            color = colors.textMuted,
-            letterSpacing = 1.sp,
-            modifier = Modifier.weight(1f)
+        Icon(
+            icon,
+            contentDescription = null,
+            tint = if (colors.isLight) Color.White else colors.bgMain,
+            modifier = Modifier.size(16.dp)
         )
+        Spacer(modifier = Modifier.width(6.dp))
         Text(
-            text = actionLabel,
-            fontSize = 10.sp,
+            text = label,
+            fontSize = 12.sp,
             fontWeight = FontWeight.Bold,
-            color = colors.accent,
-            modifier = Modifier
-                .clip(RoundedCornerShape(6.dp))
-                .clickable(onClick = onAction)
-                .padding(horizontal = 8.dp, vertical = 4.dp)
+            color = if (colors.isLight) Color.White else colors.bgMain,
+            maxLines = 1,
+            overflow = TextOverflow.Ellipsis
         )
     }
 }
@@ -385,25 +449,42 @@ private fun FolderCard(
         runCatching { Color(android.graphics.Color.parseColor(folder.color)) }
             .getOrDefault(colors.accent)
     }
+    val shape = RoundedCornerShape(16.dp)
 
     Column(
         modifier = Modifier
-            .width(136.dp)
-            .height(84.dp)
-            .clip(RoundedCornerShape(12.dp))
-            .background(colors.bgCard)
-            .border(0.8.dp, colors.borderColor, RoundedCornerShape(12.dp))
+            .width(140.dp)
+            .height(90.dp)
+            .shadow(8.dp, shape, ambientColor = folderTint.copy(alpha = 0.3f))
+            .clip(shape)
+            .background(
+                Brush.linearGradient(
+                    listOf(
+                        folderTint.copy(alpha = if (colors.isLight) 0.14f else 0.20f),
+                        colors.bgCard
+                    )
+                )
+            )
+            .border(0.8.dp, folderTint.copy(alpha = 0.35f), shape)
             .clickable(onClick = onClick)
             .padding(12.dp),
         verticalArrangement = Arrangement.SpaceBetween
     ) {
         Row(verticalAlignment = Alignment.CenterVertically) {
-            Icon(
-                imageVector = Icons.Default.Folder,
-                contentDescription = null,
-                tint = folderTint,
-                modifier = Modifier.size(17.dp)
-            )
+            Box(
+                modifier = Modifier
+                    .size(24.dp)
+                    .clip(RoundedCornerShape(8.dp))
+                    .background(folderTint.copy(alpha = 0.18f)),
+                contentAlignment = Alignment.Center
+            ) {
+                Icon(
+                    imageVector = Icons.Default.Folder,
+                    contentDescription = null,
+                    tint = folderTint,
+                    modifier = Modifier.size(14.dp)
+                )
+            }
             Spacer(modifier = Modifier.width(7.dp))
             Text(
                 text = folder.name,
@@ -416,9 +497,8 @@ private fun FolderCard(
         }
         Text(
             text = "$noteCount ${strings.notesCountSuffix}",
-            fontSize = 10.5.sp,
-            color = colors.textMuted,
-            fontFamily = FontFamily.Monospace
+            fontSize = 10.sp,
+            color = colors.textMuted
         )
     }
 }
@@ -431,10 +511,10 @@ private fun NewFolderCard(onClick: () -> Unit) {
     Column(
         modifier = Modifier
             .width(112.dp)
-            .height(84.dp)
-            .clip(RoundedCornerShape(12.dp))
-            .background(colors.bgElevated.copy(alpha = 0.4f))
-            .border(0.8.dp, colors.borderColor, RoundedCornerShape(12.dp))
+            .height(90.dp)
+            .clip(RoundedCornerShape(16.dp))
+            .background(colors.bgElevated.copy(alpha = 0.35f))
+            .border(1.dp, colors.accent.copy(alpha = 0.25f), RoundedCornerShape(16.dp))
             .clickable(onClick = onClick)
             .padding(12.dp),
         verticalArrangement = Arrangement.Center,
@@ -443,8 +523,8 @@ private fun NewFolderCard(onClick: () -> Unit) {
         Icon(
             imageVector = Icons.Default.CreateNewFolder,
             contentDescription = strings.newFolder,
-            tint = colors.textSecondary,
-            modifier = Modifier.size(19.dp)
+            tint = colors.accent,
+            modifier = Modifier.size(20.dp)
         )
         Spacer(modifier = Modifier.height(5.dp))
         Text(
@@ -473,17 +553,57 @@ private fun HistoryNoteRow(
 
     var showMenu by remember { mutableStateOf(false) }
     val preview = remember(note.content) { TextFormatUtils.toPreviewText(note.content, 2) }
+    val isLight = colors.isLight
+    val tint = remember(note.color) {
+        NoteColorHelper.getEffectiveNoteBg(note.color, isLight, colors.bgCard)
+    }
+    val accentTint = remember(note.color, isLight) {
+        // A saturated version of the note colour drives the little left stripe.
+        val c = runCatching { Color(android.graphics.Color.parseColor(note.color)) }.getOrNull()
+        if (c == null || note.color.equals("#202124", true) || note.color.equals("#FFFFFF", true)) {
+            colors.accent
+        } else {
+            c.copy(alpha = 0.85f)
+        }
+    }
+    val interaction = remember { MutableInteractionSource() }
+    val pressed by interaction.collectIsPressedAsState()
+    val scale by animateFloatAsState(
+        targetValue = if (pressed) 0.985f else 1f,
+        animationSpec = spring(stiffness = 1000f, dampingRatio = 0.8f),
+        label = "note-row"
+    )
+    val shape = RoundedCornerShape(16.dp)
 
     Row(
         modifier = Modifier
             .fillMaxWidth()
             .padding(horizontal = 12.dp, vertical = 3.dp)
-            .clip(RoundedCornerShape(12.dp))
-            .background(colors.bgCard)
-            .border(0.8.dp, colors.borderColor, RoundedCornerShape(12.dp))
-            .clickable(onClick = onOpen)
+            .scale(scale)
+            .shadow(6.dp, shape, ambientColor = Color.Black.copy(alpha = 0.25f))
+            .clip(shape)
+            .background(
+                Brush.horizontalGradient(
+                    listOf(
+                        accentTint.copy(alpha = if (isLight) 0.10f else 0.14f),
+                        tint,
+                        tint
+                    )
+                )
+            )
+            .border(0.7.dp, colors.borderColor.copy(alpha = 0.7f), shape)
+            .clickable(interactionSource = interaction, indication = null, onClick = onOpen)
             .padding(start = 12.dp, end = 4.dp, top = 10.dp, bottom = 10.dp)
     ) {
+        Box(
+            modifier = Modifier
+                .width(3.dp)
+                .height(38.dp)
+                .clip(RoundedCornerShape(3.dp))
+                .background(accentTint)
+                .align(Alignment.CenterVertically)
+        )
+        Spacer(modifier = Modifier.width(10.dp))
         Column(modifier = Modifier.weight(1f)) {
             Row(verticalAlignment = Alignment.CenterVertically) {
                 if (note.isPinned) {
@@ -503,6 +623,15 @@ private fun HistoryNoteRow(
                     maxLines = 1,
                     overflow = TextOverflow.Ellipsis
                 )
+                if (note.reminderAt != null && note.reminderAt!! > System.currentTimeMillis()) {
+                    Spacer(modifier = Modifier.width(5.dp))
+                    Icon(
+                        Icons.Default.NotificationsActive,
+                        contentDescription = null,
+                        tint = colors.accentWarm,
+                        modifier = Modifier.size(11.dp)
+                    )
+                }
             }
 
             if (preview.isNotBlank()) {
@@ -528,8 +657,8 @@ private fun HistoryNoteRow(
                     Row(
                         verticalAlignment = Alignment.CenterVertically,
                         modifier = Modifier
-                            .clip(RoundedCornerShape(4.dp))
-                            .background(colors.bgElevated)
+                            .clip(RoundedCornerShape(6.dp))
+                            .background(folderTint.copy(alpha = 0.14f))
                             .padding(horizontal = 5.dp, vertical = 2.dp)
                     ) {
                         Icon(
@@ -571,7 +700,7 @@ private fun HistoryNoteRow(
             Icon(
                 imageVector = if (note.isFavorite) Icons.Filled.Star else Icons.Outlined.Star,
                 contentDescription = "Favorite",
-                tint = if (note.isFavorite) colors.accent else colors.textMuted,
+                tint = if (note.isFavorite) colors.accentWarm else colors.textMuted,
                 modifier = Modifier.size(16.dp)
             )
         }
@@ -647,36 +776,34 @@ private fun EmptyHistory(onNewNote: () -> Unit) {
     Column(
         modifier = Modifier
             .fillMaxWidth()
-            .padding(horizontal = 24.dp, vertical = 32.dp),
+            .padding(horizontal = 24.dp, vertical = 30.dp),
         horizontalAlignment = Alignment.CenterHorizontally
     ) {
+        Box(
+            modifier = Modifier
+                .size(54.dp)
+                .clip(RoundedCornerShape(18.dp))
+                .background(colors.accent.copy(alpha = 0.12f)),
+            contentAlignment = Alignment.Center
+        ) {
+            Icon(
+                Icons.Default.Description,
+                contentDescription = null,
+                tint = colors.accent,
+                modifier = Modifier.size(25.dp)
+            )
+        }
+        Spacer(modifier = Modifier.height(10.dp))
         Text(
             text = strings.noNotesYet,
             fontSize = 12.5.sp,
             color = colors.textSecondary
         )
         Spacer(modifier = Modifier.height(12.dp))
-        Row(
-            modifier = Modifier
-                .clip(RoundedCornerShape(8.dp))
-                .background(colors.textPrimary)
-                .clickable(onClick = onNewNote)
-                .padding(horizontal = 14.dp, vertical = 9.dp),
-            verticalAlignment = Alignment.CenterVertically
-        ) {
-            Icon(
-                imageVector = Icons.Default.Add,
-                contentDescription = null,
-                tint = colors.bgMain,
-                modifier = Modifier.size(16.dp)
-            )
-            Spacer(modifier = Modifier.width(6.dp))
-            Text(
-                text = strings.createNote,
-                fontSize = 12.5.sp,
-                fontWeight = FontWeight.Bold,
-                color = colors.bgMain
-            )
-        }
+        GradientAction(
+            label = strings.createNote,
+            icon = Icons.Default.Add,
+            onClick = onNewNote
+        )
     }
 }

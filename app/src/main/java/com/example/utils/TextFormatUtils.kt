@@ -109,6 +109,44 @@ object TextFormatUtils {
         return format.format(Date(timestamp))
     }
 
+    /** "Сьогодні, 18:30" / "Завтра, 09:00" / "12 груд., 18:30" */
+    fun formatReminderDateTime(timestamp: Long): String {
+        if (timestamp <= 0L) return ""
+        val date = Date(timestamp)
+        val cal = java.util.Calendar.getInstance().apply { time = date }
+        val today = java.util.Calendar.getInstance()
+        val tomorrow = (today.clone() as java.util.Calendar).apply { add(java.util.Calendar.DAY_OF_YEAR, 1) }
+        val time = SimpleDateFormat("HH:mm", Locale.getDefault()).format(date)
+        val sameDay = { other: java.util.Calendar ->
+            cal.get(java.util.Calendar.YEAR) == other.get(java.util.Calendar.YEAR) &&
+                cal.get(java.util.Calendar.DAY_OF_YEAR) == other.get(java.util.Calendar.DAY_OF_YEAR)
+        }
+        val prefix = when {
+            sameDay(today) -> "Сьогодні"
+            sameDay(tomorrow) -> "Завтра"
+            cal.get(java.util.Calendar.YEAR) == today.get(java.util.Calendar.YEAR) ->
+                SimpleDateFormat("d MMM", Locale.getDefault()).format(date)
+            else -> SimpleDateFormat("d MMM yyyy", Locale.getDefault()).format(date)
+        }
+        return "$prefix, $time"
+    }
+
+    /** Compact countdown such as "через 2 год" or "5 хв тому". */
+    fun relativeReminderTime(timestamp: Long): String {
+        if (timestamp <= 0L) return ""
+        val diff = timestamp - System.currentTimeMillis()
+        val past = diff < 0
+        val minutes = kotlin.math.abs(diff) / 60000L
+        val text = when {
+            minutes < 1 -> "зараз"
+            minutes < 60 -> "$minutes хв"
+            minutes < 60 * 24 -> "${minutes / 60} год"
+            minutes < 60 * 24 * 7 -> "${minutes / (60 * 24)} дн"
+            else -> SimpleDateFormat("d MMM", Locale.getDefault()).format(Date(timestamp))
+        }
+        return if (minutes < 1) text else if (past) "$text тому" else "через $text"
+    }
+
     fun formatDateKey(timestamp: Long): String {
         val format = SimpleDateFormat("yyyy-MM-dd", Locale.US)
         return format.format(Date(timestamp))

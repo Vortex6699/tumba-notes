@@ -245,7 +245,7 @@ fun ProfileDialog(
                     onClose()
                 },
                 colors = ButtonDefaults.buttonColors(
-                    containerColor = colors.textPrimary,
+                    containerColor = colors.accent,
                     contentColor = colors.bgMain
                 ),
                 shape = RoundedCornerShape(8.dp),

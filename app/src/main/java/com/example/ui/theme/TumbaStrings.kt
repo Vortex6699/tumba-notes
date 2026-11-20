@@ -248,7 +248,36 @@ data class TumbaStrings(
     val selectColor: String,
     val gridView: String,
     val listView: String,
-    val profile: String
+    val profile: String,
+
+    // Reminders (fully local, backed by AlarmManager)
+    val reminders: String,
+    val remindersActiveSuffix: String,
+    val reminderTitle: String,
+    val reminderSubtitle: String,
+    val reminderPickDate: String,
+    val reminderPickTime: String,
+    val reminderQuickPresets: String,
+    val reminderPastTimeWarning: String,
+    val reminderSave: String,
+    val reminderRemove: String,
+    val reminderEdit: String,
+    val reminderAdd: String,
+    val noRemindersYet: String,
+    val noRemindersHint: String,
+    val reminderLater: String,
+    val tomorrow: String,
+    val reminderPresetHour: String,
+    val reminderPresetEvening: String,
+    val reminderPresetMorning: String,
+
+    // Rich links
+    val linkDialogTitle: String,
+    val linkLabelField: String,
+    val linkUrlField: String,
+    val linkApply: String,
+    val linkRemove: String,
+    val linkMarkdownHint: String
 )
 
 val UkrainianStrings = TumbaStrings(
@@ -483,7 +512,34 @@ val UkrainianStrings = TumbaStrings(
     selectColor = "Вибрати колір",
     gridView = "Сітка",
     listView = "Список",
-    profile = "Профіль"
+    profile = "Профіль",
+
+    reminders = "Нагадування",
+    remindersActiveSuffix = "активних",
+    reminderTitle = "Нагадування",
+    reminderSubtitle = "Локальне сповіщення, працює офлайн",
+    reminderPickDate = "Дата",
+    reminderPickTime = "Час",
+    reminderQuickPresets = "ШВИДКИЙ ВИБІР",
+    reminderPastTimeWarning = "Оберіть час у майбутньому",
+    reminderSave = "Зберегти",
+    reminderRemove = "Видалити",
+    reminderEdit = "Змінити нагадування",
+    reminderAdd = "Додати нагадування",
+    noRemindersYet = "Нагадувань ще немає",
+    noRemindersHint = "Відкрийте нотатку та натисніть дзвіночок, щоб нагадати собі про важливе.",
+    reminderLater = "Пізніше",
+    tomorrow = "Завтра",
+    reminderPresetHour = "+1 год",
+    reminderPresetEvening = "Сьогодні 20:00",
+    reminderPresetMorning = "Завтра 09:00",
+
+    linkDialogTitle = "Посилання",
+    linkLabelField = "Текст (необов'язково)",
+    linkUrlField = "https://example.com",
+    linkApply = "Застосувати",
+    linkRemove = "Прибрати посилання",
+    linkMarkdownHint = "Порада: введіть [Текст](https://example.com) і пробіл — посилання створиться саме."
 )
 
 val EnglishStrings = TumbaStrings(
@@ -718,7 +774,34 @@ val EnglishStrings = TumbaStrings(
     selectColor = "Select Color",
     gridView = "Grid View",
     listView = "List View",
-    profile = "Profile"
+    profile = "Profile",
+
+    reminders = "Reminders",
+    remindersActiveSuffix = "active",
+    reminderTitle = "Reminder",
+    reminderSubtitle = "Local notification, works offline",
+    reminderPickDate = "Date",
+    reminderPickTime = "Time",
+    reminderQuickPresets = "QUICK PICK",
+    reminderPastTimeWarning = "Pick a time in the future",
+    reminderSave = "Save",
+    reminderRemove = "Remove",
+    reminderEdit = "Edit reminder",
+    reminderAdd = "Add reminder",
+    noRemindersYet = "No reminders yet",
+    noRemindersHint = "Open a note and tap the bell to be reminded about what matters.",
+    reminderLater = "Later",
+    tomorrow = "Tomorrow",
+    reminderPresetHour = "+1 hr",
+    reminderPresetEvening = "Today 20:00",
+    reminderPresetMorning = "Tomorrow 09:00",
+
+    linkDialogTitle = "Link",
+    linkLabelField = "Text (optional)",
+    linkUrlField = "https://example.com",
+    linkApply = "Apply",
+    linkRemove = "Remove link",
+    linkMarkdownHint = "Tip: type [Text](https://example.com) and a space — the link is created automatically."
 )
 
 val RussianStrings = TumbaStrings(
@@ -953,7 +1036,34 @@ val RussianStrings = TumbaStrings(
     selectColor = "Выбрать цвет",
     gridView = "Сетка",
     listView = "Список",
-    profile = "Профиль"
+    profile = "Профиль",
+
+    reminders = "Напоминания",
+    remindersActiveSuffix = "активных",
+    reminderTitle = "Напоминание",
+    reminderSubtitle = "Локальное уведомление, работает офлайн",
+    reminderPickDate = "Дата",
+    reminderPickTime = "Время",
+    reminderQuickPresets = "БЫСТРЫЙ ВЫБОР",
+    reminderPastTimeWarning = "Выберите время в будущем",
+    reminderSave = "Сохранить",
+    reminderRemove = "Удалить",
+    reminderEdit = "Изменить напоминание",
+    reminderAdd = "Добавить напоминание",
+    noRemindersYet = "Напоминаний пока нет",
+    noRemindersHint = "Откройте заметку и нажмите колокольчик, чтобы напомнить себе о важном.",
+    reminderLater = "Позже",
+    tomorrow = "Завтра",
+    reminderPresetHour = "+1 ч",
+    reminderPresetEvening = "Сегодня 20:00",
+    reminderPresetMorning = "Завтра 09:00",
+
+    linkDialogTitle = "Ссылка",
+    linkLabelField = "Текст (необязательно)",
+    linkUrlField = "https://example.com",
+    linkApply = "Применить",
+    linkRemove = "Убрать ссылку",
+    linkMarkdownHint = "Совет: введите [Текст](https://example.com) и пробел — ссылка создастся сама."
 )
 
 fun getStringsForLanguage(lang: String): TumbaStrings {

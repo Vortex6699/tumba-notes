@@ -328,7 +328,7 @@ fun FolderDialog(
                     }
                 },
                 enabled = name.isNotBlank(),
-                colors = ButtonDefaults.buttonColors(containerColor = colors.textPrimary, contentColor = colors.bgMain),
+                colors = ButtonDefaults.buttonColors(containerColor = colors.accent, contentColor = colors.bgMain),
                 shape = RoundedCornerShape(8.dp),
                 modifier = Modifier.testTag("save_folder_confirm_button")
             ) {

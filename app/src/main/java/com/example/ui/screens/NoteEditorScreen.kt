@@ -52,6 +52,8 @@ import androidx.compose.material.icons.filled.History
 import androidx.compose.material.icons.filled.HorizontalRule
 import androidx.compose.material.icons.filled.Link
 import androidx.compose.material.icons.filled.MoreVert
+import androidx.compose.material.icons.filled.NotificationsActive
+import androidx.compose.material.icons.filled.NotificationsNone
 import androidx.compose.material.icons.filled.Palette
 import androidx.compose.material.icons.filled.PushPin
 import androidx.compose.material.icons.filled.Share
@@ -133,6 +135,8 @@ fun NoteEditorScreen(
     onAddAttachment: () -> Unit = {},
     onDeleteAttachment: (Attachment) -> Unit = {},
     onOpenLinkedNote: (String) -> Unit = {},
+    onSetReminder: (String, Long) -> Unit = { _, _ -> },
+    onClearReminder: (String) -> Unit = {},
     modifier: Modifier = Modifier
 ) {
     val context = LocalContext.current
@@ -179,6 +183,9 @@ fun NoteEditorScreen(
     var showMoreMenu by remember { mutableStateOf(false) }
     var showRevisionsDialog by remember { mutableStateOf(false) }
     var showAttachmentsSheet by remember { mutableStateOf(false) }
+    var showReminderDialog by remember { mutableStateOf(false) }
+    // Kept locally so an autosave fired before the note flow refreshes cannot drop the reminder.
+    var reminderAt by remember(note.id, note.reminderAt) { mutableStateOf(note.reminderAt) }
 
     val primaryTextColorInt = remember(colors.textPrimary) {
         val c = colors.textPrimary
@@ -202,7 +209,8 @@ fun NoteEditorScreen(
             title = title,
             content = currentContent,
             folderId = selectedFolderId,
-            color = noteColor
+            color = noteColor,
+            reminderAt = reminderAt
         )
     }
 
@@ -360,6 +368,29 @@ fun NoteEditorScreen(
                         )
                     }
 
+                    // Reminder bell: warm highlight when a reminder is armed
+                    IconButton(
+                        onClick = { showReminderDialog = true },
+                        modifier = Modifier
+                            .size(36.dp)
+                            .testTag("editor_reminder_button")
+                    ) {
+                        Icon(
+                            imageVector = if (reminderAt != null && reminderAt!! > System.currentTimeMillis()) {
+                                Icons.Default.NotificationsActive
+                            } else {
+                                Icons.Default.NotificationsNone
+                            },
+                            contentDescription = strings.reminderAdd,
+                            tint = if (reminderAt != null && reminderAt!! > System.currentTimeMillis()) {
+                                colors.accentWarm
+                            } else {
+                                colors.textSecondary
+                            },
+                            modifier = Modifier.size(19.dp)
+                        )
+                    }
+
                     // More Menu
                     Box {
                         IconButton(
@@ -492,6 +523,49 @@ fun NoteEditorScreen(
                             text = currentFolder?.name ?: strings.noFolder,
                             style = MaterialTheme.typography.labelSmall.copy(
                                 color = colors.textPrimary,
+                                fontSize = 11.sp
+                            )
+                        )
+                    }
+                }
+
+                // Reminder chip: shows the armed time or invites to add one
+                Surface(
+                    shape = RoundedCornerShape(12.dp),
+                    color = if (reminderAt != null && reminderAt!! > System.currentTimeMillis()) {
+                        colors.accentWarm.copy(alpha = 0.14f)
+                    } else {
+                        colors.bgElevated.copy(alpha = 0.8f)
+                    },
+                    border = androidx.compose.foundation.BorderStroke(
+                        0.8.dp,
+                        if (reminderAt != null && reminderAt!! > System.currentTimeMillis()) {
+                            colors.accentWarm.copy(alpha = 0.4f)
+                        } else {
+                            colors.borderColor
+                        }
+                    ),
+                    modifier = Modifier
+                        .clickable { showReminderDialog = true }
+                        .testTag("editor_reminder_chip")
+                ) {
+                    Row(
+                        verticalAlignment = Alignment.CenterVertically,
+                        modifier = Modifier.padding(horizontal = 8.dp, vertical = 4.dp)
+                    ) {
+                        Icon(
+                            imageVector = Icons.Default.NotificationsNone,
+                            contentDescription = null,
+                            tint = if (reminderAt != null) colors.accentWarm else colors.accent,
+                            modifier = Modifier.size(12.dp)
+                        )
+                        Spacer(modifier = Modifier.width(4.dp))
+                        Text(
+                            text = reminderAt?.takeIf { it > System.currentTimeMillis() }
+                                ?.let { TextFormatUtils.formatReminderDateTime(it) }
+                                ?: strings.reminderAdd,
+                            style = MaterialTheme.typography.labelSmall.copy(
+                                color = if (reminderAt != null) colors.accentWarm else colors.textPrimary,
                                 fontSize = 11.sp
                             )
                         )
@@ -806,14 +880,27 @@ fun NoteEditorScreen(
 
     // Link Dialog (Allows linking to existing note or URL)
     if (showLinkDialog) {
-        var linkUrl by remember { mutableStateOf("") }
-        var linkText by remember { mutableStateOf("") }
+        // Prefill from an existing link or from the current selection so editing is one tap.
+        val existingLink = remember { wysiwygState.linkAtSelection() }
+        val selectionText = remember { wysiwygState.selectedText() }
+        var linkUrl by remember { mutableStateOf(existingLink?.second ?: "") }
+        var linkText by remember { mutableStateOf(existingLink?.first ?: selectionText) }
+        var linkError by remember { mutableStateOf(false) }
 
         AlertDialog(
             onDismissRequest = { showLinkDialog = false },
-            title = { Text(strings.internalLink, color = colors.textPrimary, fontSize = 16.sp, fontWeight = FontWeight.Bold) },
+            title = { Text(strings.linkDialogTitle, color = colors.textPrimary, fontSize = 16.sp, fontWeight = FontWeight.Bold) },
             text = {
                 Column(modifier = Modifier.fillMaxWidth(), verticalArrangement = Arrangement.spacedBy(10.dp)) {
+                    Text(strings.linkMarkdownHint, fontSize = 10.5.sp, color = colors.textMuted)
+                    if (selectionText.isNotBlank()) {
+                        Text(
+                            text = "«${selectionText.take(60)}»",
+                            fontSize = 11.sp,
+                            fontWeight = FontWeight.SemiBold,
+                            color = colors.accent
+                        )
+                    }
                     Text(strings.linkToNotePrompt, fontSize = 11.5.sp, color = colors.textSecondary)
 
                     // Quick list of other notes to link to
@@ -843,7 +930,8 @@ fun NoteEditorScreen(
                     OutlinedTextField(
                         value = linkText,
                         onValueChange = { linkText = it },
-                        placeholder = { Text("Link Text (optional)", color = colors.textMuted, fontSize = 12.sp) },
+                        placeholder = { Text(strings.linkLabelField, color = colors.textMuted, fontSize = 12.sp) },
+                        isError = linkError && linkUrl.isBlank(),
                         singleLine = true,
                         modifier = Modifier.fillMaxWidth(),
                         colors = OutlinedTextFieldDefaults.colors(
@@ -859,8 +947,9 @@ fun NoteEditorScreen(
 
                     OutlinedTextField(
                         value = linkUrl,
-                        onValueChange = { linkUrl = it },
-                        placeholder = { Text("https://example.com", color = colors.textMuted, fontSize = 12.sp) },
+                        onValueChange = { linkUrl = it; linkError = false },
+                        placeholder = { Text(strings.linkUrlField, color = colors.textMuted, fontSize = 12.sp) },
+                        isError = linkError,
                         singleLine = true,
                         modifier = Modifier.fillMaxWidth(),
                         colors = OutlinedTextFieldDefaults.colors(
@@ -878,26 +967,66 @@ fun NoteEditorScreen(
             confirmButton = {
                 Button(
                     onClick = {
-                        val finalUrl = linkUrl.trim()
-                        val finalTitle = linkText.trim().ifBlank { finalUrl }
-                        if (finalUrl.isNotBlank()) {
+                        if (linkUrl.isBlank()) {
+                            linkError = true
+                            return@Button
+                        }
+                        val finalUrl = wysiwygState.normalizeUrl(linkUrl)
+                        val finalTitle = linkText.trim().ifBlank {
+                            selectionText.ifBlank { existingLink?.first ?: finalUrl }
+                        }
+                        if (existingLink != null) {
+                            val newLabel = linkText.trim().takeIf { it.isNotBlank() && it != existingLink.first }
+                            wysiwygState.updateLinkAtSelection(finalUrl, newLabel, accentColorInt)
+                        } else {
                             wysiwygState.insertLink(finalTitle, finalUrl, accentColorInt)
                         }
+                        onSaveNote(currentNoteState())
                         showLinkDialog = false
                     },
-                    colors = ButtonDefaults.buttonColors(containerColor = colors.textPrimary, contentColor = colors.bgMain)
+                    colors = ButtonDefaults.buttonColors(containerColor = colors.accent, contentColor = colors.bgMain)
                 ) {
-                    Text(strings.confirm)
+                    Text(strings.linkApply)
                 }
             },
             dismissButton = {
-                TextButton(onClick = { showLinkDialog = false }) {
-                    Text(strings.cancel, color = colors.textSecondary)
+                Row(verticalAlignment = Alignment.CenterVertically) {
+                    if (existingLink != null) {
+                        TextButton(onClick = {
+                            wysiwygState.removeLinkAtSelection()
+                            onSaveNote(currentNoteState())
+                            showLinkDialog = false
+                        }) {
+                            Text(strings.linkRemove, color = colors.danger, fontSize = 12.sp)
+                        }
+                    }
+                    TextButton(onClick = { showLinkDialog = false }) {
+                        Text(strings.cancel, color = colors.textSecondary)
+                    }
                 }
             },
             containerColor = colors.bgElevated
         )
     }
+
+    // Reminder Dialog (offline AlarmManager reminder)
+    ReminderDialog(
+        isOpen = showReminderDialog,
+        initialTime = reminderAt,
+        onDismiss = { showReminderDialog = false },
+        onConfirm = { time ->
+            reminderAt = time
+            showReminderDialog = false
+            onSaveNote(currentNoteState())
+            onSetReminder(note.id, time)
+        },
+        onRemove = {
+            reminderAt = null
+            showReminderDialog = false
+            onSaveNote(currentNoteState())
+            onClearReminder(note.id)
+        }
+    )
 
     // Folder Picker Dialog
     if (showFolderMenu) {
@@ -989,7 +1118,7 @@ fun NoteEditorScreen(
                         onUpdateNoteTags(note.id, currentTags.toList())
                         showTagDialog = false
                     },
-                    colors = ButtonDefaults.buttonColors(containerColor = colors.textPrimary, contentColor = colors.bgMain)
+                    colors = ButtonDefaults.buttonColors(containerColor = colors.accent, contentColor = colors.bgMain)
                 ) {
                     Text(strings.done)
                 }

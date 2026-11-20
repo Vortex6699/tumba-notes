@@ -18,6 +18,7 @@ import com.example.data.model.SearchHistoryItem
 import com.example.data.model.Tag
 import com.example.data.model.ViewSection
 import com.example.data.repository.TumbaRepository
+import com.example.reminder.ReminderScheduler
 import com.example.utils.TextFormatUtils
 import kotlinx.coroutines.ExperimentalCoroutinesApi
 import kotlinx.coroutines.Job
@@ -99,6 +100,9 @@ class TumbaViewModel(application: Application) : AndroidViewModel(application) {
     val settings: StateFlow<AppSettings> = repository.allSettings
         .stateIn(viewModelScope, SharingStarted.WhileSubscribed(5000), AppSettings())
 
+    val remindersNotes: StateFlow<List<Note>> = repository.getNotesWithReminders()
+        .stateIn(viewModelScope, SharingStarted.WhileSubscribed(5000), emptyList())
+
     private val _currentSection = MutableStateFlow(ViewSection.HOME)
     val currentSection: StateFlow<ViewSection> = _currentSection.asStateFlow()
 
@@ -171,6 +175,7 @@ class TumbaViewModel(application: Application) : AndroidViewModel(application) {
             ViewSection.GRAPH -> "graph"
             ViewSection.TEMPLATES -> "templates"
             ViewSection.ANALYTICS -> "analytics"
+            ViewSection.REMINDERS -> "reminders"
             else -> "list"
         }
     }
@@ -210,6 +215,7 @@ class TumbaViewModel(application: Application) : AndroidViewModel(application) {
             ViewSection.GRAPH -> "graph"
             ViewSection.TEMPLATES -> "templates"
             ViewSection.ANALYTICS -> "analytics"
+            ViewSection.REMINDERS -> "reminders"
             else -> "list"
         }
     }
@@ -344,6 +350,34 @@ class TumbaViewModel(application: Application) : AndroidViewModel(application) {
             repository.archiveNote(noteId)
             if (_activeNoteId.value == noteId) {
                 navigateBackFromEditor()
+            }
+        }
+    }
+
+    /** Stores the reminder and schedules its local, exact-when-allowed alarm. */
+    fun setReminder(noteId: String, reminderAt: Long) {
+        viewModelScope.launch {
+            repository.setReminder(noteId, reminderAt)
+            val note = repository.getNote(noteId)?.copy(reminderAt = reminderAt)
+            if (note != null) {
+                ReminderScheduler.scheduleReminder(getApplication(), note)
+            }
+        }
+    }
+
+    fun clearReminder(noteId: String) {
+        viewModelScope.launch {
+            repository.clearReminder(noteId)
+            ReminderScheduler.cancelReminder(getApplication(), noteId)
+        }
+    }
+
+    /** Re-arms every future reminder when the app comes back to the foreground. */
+    fun rescheduleAllReminders() {
+        viewModelScope.launch {
+            runCatching {
+                val notes = repository.getAllNotesOnce()
+                ReminderScheduler.rescheduleAll(getApplication(), notes)
             }
         }
     }

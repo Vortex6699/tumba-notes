@@ -29,7 +29,8 @@ data class NoteEntity(
     val trashedAt: Long?,
     val createdAt: Long,
     val updatedAt: Long,
-    val color: String = "#202124"
+    val color: String = "#202124",
+    val reminderAt: Long? = null
 ) {
     fun toDomain() = Note(
         id = id,
@@ -43,7 +44,8 @@ data class NoteEntity(
         trashedAt = trashedAt,
         createdAt = createdAt,
         updatedAt = updatedAt,
-        color = color
+        color = color,
+        reminderAt = reminderAt
     )
 
     companion object {
@@ -59,7 +61,8 @@ data class NoteEntity(
             trashedAt = note.trashedAt,
             createdAt = note.createdAt,
             updatedAt = note.updatedAt,
-            color = note.color
+            color = note.color,
+            reminderAt = note.reminderAt
         )
     }
 }

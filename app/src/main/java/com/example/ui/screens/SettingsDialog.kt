@@ -395,7 +395,7 @@ fun SettingsDialog(
                                         }
                                         context.startActivity(Intent.createChooser(sendIntent, "Share Backup"))
                                     },
-                                    colors = ButtonDefaults.buttonColors(containerColor = colors.textPrimary, contentColor = colors.bgMain),
+                                    colors = ButtonDefaults.buttonColors(containerColor = colors.accent, contentColor = colors.bgMain),
                                     shape = RoundedCornerShape(8.dp),
                                     modifier = Modifier.testTag("share_backup_button")
                                 ) {

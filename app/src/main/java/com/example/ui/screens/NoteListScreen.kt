@@ -41,6 +41,7 @@ import androidx.compose.material.icons.filled.Folder
 import androidx.compose.material.icons.filled.GridView
 import androidx.compose.material.icons.filled.Menu
 import androidx.compose.material.icons.filled.MoreVert
+import androidx.compose.material.icons.filled.NotificationsActive
 import androidx.compose.material.icons.filled.Palette
 import androidx.compose.material.icons.filled.PushPin
 import androidx.compose.material.icons.filled.Restore
@@ -70,6 +71,8 @@ import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
+import androidx.compose.ui.draw.shadow
+import androidx.compose.ui.graphics.Brush
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.layout.ContentScale
 import androidx.compose.ui.platform.testTag
@@ -544,7 +547,7 @@ fun NoteListScreen(
                             Button(
                                 onClick = onNewNote,
                                 colors = ButtonDefaults.buttonColors(
-                                    containerColor = colors.textPrimary,
+                                    containerColor = colors.accent,
                                     contentColor = colors.bgMain
                                 ),
                                 shape = RoundedCornerShape(8.dp),
@@ -742,22 +745,31 @@ fun NoteListScreen(
             }
         }
 
-        // Floating Action Button (New Note)
+        // Floating Action Button (New Note) with the brand gradient
         if (!isTrashSection) {
-            FloatingActionButton(
-                onClick = onNewNote,
+            val fabShape = RoundedCornerShape(20.dp)
+            Box(
                 modifier = Modifier
                     .align(Alignment.BottomEnd)
                     .padding(20.dp)
+                    .shadow(
+                        elevation = 18.dp,
+                        shape = fabShape,
+                        ambientColor = colors.accent.copy(alpha = 0.6f),
+                        spotColor = colors.accent.copy(alpha = 0.7f)
+                    )
+                    .size(58.dp)
+                    .clip(fabShape)
+                    .background(colors.brandBrush)
+                    .clickable(onClick = onNewNote)
                     .testTag("notes_fab_new_note"),
-                containerColor = colors.textPrimary,
-                contentColor = colors.bgMain,
-                shape = CircleShape
+                contentAlignment = Alignment.Center
             ) {
                 Icon(
                     imageVector = Icons.Default.Add,
                     contentDescription = strings.newNote,
-                    modifier = Modifier.size(26.dp)
+                    tint = if (colors.isLight) Color.White else colors.bgMain,
+                    modifier = Modifier.size(27.dp)
                 )
             }
         }
@@ -815,15 +827,51 @@ private fun NoteCard(
         NoteColorHelper.getSecondaryTextColorForBackground(noteBgColor)
     }
 
+    // A saturated tint derived from the note colour gives every card its own identity.
+    val cardAccent = remember(note.color, isLight) {
+        val raw = runCatching { Color(android.graphics.Color.parseColor(note.color)) }.getOrNull()
+        if (raw == null || note.color.equals("#202124", true) || note.color.equals("#FFFFFF", true)) {
+            colors.accent
+        } else {
+            raw
+        }
+    }
+    val cardShape = RoundedCornerShape(18.dp)
+
     Box(
         modifier = modifier
             .fillMaxWidth()
-            .clip(RoundedCornerShape(12.dp))
-            .background(noteBgColor)
-            .border(0.8.dp, colors.borderColor, RoundedCornerShape(12.dp))
+            .shadow(
+                elevation = 9.dp,
+                shape = cardShape,
+                ambientColor = cardAccent.copy(alpha = 0.32f),
+                spotColor = cardAccent.copy(alpha = 0.28f)
+            )
+            .clip(cardShape)
+            .background(
+                Brush.linearGradient(
+                    listOf(
+                        cardAccent.copy(alpha = if (isLight) 0.10f else 0.16f),
+                        noteBgColor,
+                        noteBgColor
+                    )
+                )
+            )
+            .border(0.7.dp, colors.borderColor.copy(alpha = 0.75f), cardShape)
             .clickable(onClick = onSelectNote)
             .padding(12.dp)
     ) {
+        Box(
+            modifier = Modifier
+                .align(Alignment.TopEnd)
+                .size(46.dp)
+                .clip(CircleShape)
+                .background(
+                    Brush.radialGradient(
+                        listOf(cardAccent.copy(alpha = 0.22f), Color.Transparent)
+                    )
+                )
+        )
         Column {
             // Header Row: Pin, Star, Title, Options
             Row(
@@ -852,6 +900,15 @@ private fun NoteCard(
                         maxLines = 1,
                         overflow = TextOverflow.Ellipsis
                     )
+                    if (note.reminderAt != null && note.reminderAt!! > System.currentTimeMillis()) {
+                        Spacer(modifier = Modifier.width(5.dp))
+                        Icon(
+                            imageVector = Icons.Default.NotificationsActive,
+                            contentDescription = null,
+                            tint = colors.accentWarm,
+                            modifier = Modifier.size(11.dp)
+                        )
+                    }
                 }
 
                 Row(verticalAlignment = Alignment.CenterVertically) {

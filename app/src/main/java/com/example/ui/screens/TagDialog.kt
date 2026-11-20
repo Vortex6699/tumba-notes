@@ -152,7 +152,7 @@ fun TagDialog(
                     }
                 },
                 enabled = name.isNotBlank(),
-                colors = ButtonDefaults.buttonColors(containerColor = colors.textPrimary, contentColor = colors.bgMain),
+                colors = ButtonDefaults.buttonColors(containerColor = colors.accent, contentColor = colors.bgMain),
                 shape = RoundedCornerShape(8.dp),
                 modifier = Modifier.testTag("save_tag_confirm_button")
             ) {

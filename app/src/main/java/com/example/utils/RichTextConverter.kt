@@ -48,26 +48,29 @@ object RichTextConverter {
                 // H1 Heading
                 trimmed.startsWith("# ") -> {
                     val text = trimmed.removePrefix("# ")
-                    ssb.append(text)
+                    val contentStart = ssb.length
+                    parseInlineMarkdown(text, ssb, accentColor, codeBgColor)
                     val lineEnd = ssb.length
-                    ssb.setSpan(RelativeSizeSpan(1.45f), lineStart, lineEnd, Spanned.SPAN_EXCLUSIVE_EXCLUSIVE)
-                    ssb.setSpan(StyleSpan(Typeface.BOLD), lineStart, lineEnd, Spanned.SPAN_EXCLUSIVE_EXCLUSIVE)
+                    ssb.setSpan(RelativeSizeSpan(1.45f), contentStart, lineEnd, Spanned.SPAN_EXCLUSIVE_EXCLUSIVE)
+                    ssb.setSpan(StyleSpan(Typeface.BOLD), contentStart, lineEnd, Spanned.SPAN_EXCLUSIVE_EXCLUSIVE)
                 }
                 // H2 Heading
                 trimmed.startsWith("## ") -> {
                     val text = trimmed.removePrefix("## ")
-                    ssb.append(text)
+                    val contentStart = ssb.length
+                    parseInlineMarkdown(text, ssb, accentColor, codeBgColor)
                     val lineEnd = ssb.length
-                    ssb.setSpan(RelativeSizeSpan(1.28f), lineStart, lineEnd, Spanned.SPAN_EXCLUSIVE_EXCLUSIVE)
-                    ssb.setSpan(StyleSpan(Typeface.BOLD), lineStart, lineEnd, Spanned.SPAN_EXCLUSIVE_EXCLUSIVE)
+                    ssb.setSpan(RelativeSizeSpan(1.28f), contentStart, lineEnd, Spanned.SPAN_EXCLUSIVE_EXCLUSIVE)
+                    ssb.setSpan(StyleSpan(Typeface.BOLD), contentStart, lineEnd, Spanned.SPAN_EXCLUSIVE_EXCLUSIVE)
                 }
                 // H3 Heading
                 trimmed.startsWith("### ") -> {
                     val text = trimmed.removePrefix("### ")
-                    ssb.append(text)
+                    val contentStart = ssb.length
+                    parseInlineMarkdown(text, ssb, accentColor, codeBgColor)
                     val lineEnd = ssb.length
-                    ssb.setSpan(RelativeSizeSpan(1.15f), lineStart, lineEnd, Spanned.SPAN_EXCLUSIVE_EXCLUSIVE)
-                    ssb.setSpan(StyleSpan(Typeface.BOLD), lineStart, lineEnd, Spanned.SPAN_EXCLUSIVE_EXCLUSIVE)
+                    ssb.setSpan(RelativeSizeSpan(1.15f), contentStart, lineEnd, Spanned.SPAN_EXCLUSIVE_EXCLUSIVE)
+                    ssb.setSpan(StyleSpan(Typeface.BOLD), contentStart, lineEnd, Spanned.SPAN_EXCLUSIVE_EXCLUSIVE)
                 }
                 // Checkbox unchecked
                 trimmed.startsWith("[ ] ") || trimmed.startsWith("☐ ") -> {
@@ -90,11 +93,12 @@ object RichTextConverter {
                 // Blockquote
                 trimmed.startsWith("> ") -> {
                     val text = trimmed.removePrefix("> ")
-                    ssb.append(text)
+                    val contentStart = ssb.length
+                    parseInlineMarkdown(text, ssb, accentColor, codeBgColor)
                     val lineEnd = ssb.length
-                    ssb.setSpan(QuoteSpan(accentColor), lineStart, lineEnd, Spanned.SPAN_EXCLUSIVE_EXCLUSIVE)
-                    ssb.setSpan(StyleSpan(Typeface.ITALIC), lineStart, lineEnd, Spanned.SPAN_EXCLUSIVE_EXCLUSIVE)
-                    ssb.setSpan(ForegroundColorSpan(mutedColor), lineStart, lineEnd, Spanned.SPAN_EXCLUSIVE_EXCLUSIVE)
+                    ssb.setSpan(QuoteSpan(accentColor), contentStart, lineEnd, Spanned.SPAN_EXCLUSIVE_EXCLUSIVE)
+                    ssb.setSpan(StyleSpan(Typeface.ITALIC), contentStart, lineEnd, Spanned.SPAN_EXCLUSIVE_EXCLUSIVE)
+                    ssb.setSpan(ForegroundColorSpan(mutedColor), contentStart, lineEnd, Spanned.SPAN_EXCLUSIVE_EXCLUSIVE)
                 }
                 // Bullet list item
                 trimmed.startsWith("• ") || trimmed.startsWith("- ") || trimmed.startsWith("* ") -> {
@@ -103,15 +107,17 @@ object RichTextConverter {
                         trimmed.startsWith("- ") -> trimmed.removePrefix("- ")
                         else -> trimmed.removePrefix("* ")
                     }
-                    ssb.append(text)
+                    val contentStart = ssb.length
+                    parseInlineMarkdown(text, ssb, accentColor, codeBgColor)
                     val lineEnd = ssb.length
-                    ssb.setSpan(BulletSpan(24, accentColor), lineStart, lineEnd, Spanned.SPAN_EXCLUSIVE_EXCLUSIVE)
+                    ssb.setSpan(BulletSpan(24, accentColor), contentStart, lineEnd, Spanned.SPAN_EXCLUSIVE_EXCLUSIVE)
                 }
                 // Numbered list item: e.g. "1. Task"
                 trimmed.matches(Regex("^\\d+\\.\\s.*")) -> {
                     val prefix = trimmed.takeWhile { it != ' ' } + " "
                     val text = trimmed.removePrefix(prefix)
-                    ssb.append(prefix).append(text)
+                    ssb.append(prefix)
+                    parseInlineMarkdown(text, ssb, accentColor, codeBgColor)
                 }
                 // Code fence
                 trimmed.startsWith("```") -> {
@@ -295,20 +301,28 @@ object RichTextConverter {
                 else -> ""
             }
 
-            val cleanLine = when {
-                line.startsWith(CHECKBOX_UNCHECKED) -> line.removePrefix(CHECKBOX_UNCHECKED)
-                line.startsWith(CHECKBOX_CHECKED) -> line.removePrefix(CHECKBOX_CHECKED)
-                line == "――――――――――――――――――――" -> "---"
-                else -> line
+            // A line can carry both a block marker (heading/quote/bullet/checkbox) and
+            // inline spans (bold, links, code). Strip only the marker that is really
+            // present in the buffer, then serialize the remaining content, so links
+            // inside headings and list items survive a save/reload round trip.
+            val rawMarker = when {
+                line.startsWith(CHECKBOX_UNCHECKED) -> CHECKBOX_UNCHECKED
+                line.startsWith(CHECKBOX_CHECKED) -> CHECKBOX_CHECKED
+                line.startsWith("### ") -> "### "
+                line.startsWith("## ") -> "## "
+                line.startsWith("# ") -> "# "
+                line.startsWith("> ") -> "> "
+                line.startsWith("- ") || line.startsWith("• ") || line.startsWith("* ") -> line.substring(0, 2)
+                else -> ""
             }
 
-            if (linePrefix == "# " || linePrefix == "## " || linePrefix == "### " || linePrefix == "> " || linePrefix == "- ") {
-                sb.append(linePrefix).append(cleanLine)
-            } else if (linePrefix == "[ ] " || linePrefix == "[x] ") {
-                sb.append(linePrefix).append(cleanLine)
+            if (line == "――――――――――――――――――――") {
+                sb.append("---")
             } else {
-                // Serialize inline spans within the line
-                sb.append(serializeInlineSpans(spanned, lineStart, lineEnd))
+                // Only drop the marker when the block style above already represents it.
+                val markerLength = if (linePrefix.isNotEmpty()) rawMarker.length else 0
+                val contentStart = (lineStart + markerLength).coerceAtMost(lineEnd)
+                sb.append(linePrefix).append(serializeInlineSpans(spanned, contentStart, lineEnd))
             }
 
             if (lineIdx < lines.size - 1) {

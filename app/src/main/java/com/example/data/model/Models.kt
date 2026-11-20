@@ -12,7 +12,8 @@ data class Note(
     val trashedAt: Long? = null,
     val createdAt: Long = System.currentTimeMillis(),
     val updatedAt: Long = System.currentTimeMillis(),
-    val color: String = "#202124"
+    val color: String = "#202124",
+    val reminderAt: Long? = null
 )
 
 data class Folder(
@@ -55,6 +56,7 @@ data class AppSettings(
 enum class ViewSection(val id: String, val title: String) {
     HOME("home", "Home"),
     ALL("all", "All Notes"),
+    REMINDERS("reminders", "Reminders"),
     FAVORITES("favorites", "Favorites"),
     RECENT("recent", "Recent"),
     ARCHIVE("archive", "Archive"),

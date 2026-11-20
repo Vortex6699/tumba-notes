@@ -28,6 +28,7 @@ import androidx.compose.material.icons.filled.Description
 import androidx.compose.material.icons.filled.Folder
 import androidx.compose.material.icons.filled.History
 import androidx.compose.material.icons.filled.Home
+import androidx.compose.material.icons.filled.NotificationsActive
 import androidx.compose.material.icons.filled.Search
 import androidx.compose.material.icons.filled.Settings
 import androidx.compose.material.icons.filled.Share
@@ -43,6 +44,7 @@ import androidx.compose.runtime.Composable
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
+import androidx.compose.ui.graphics.Brush
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.vector.ImageVector
 import androidx.compose.ui.platform.testTag
@@ -111,33 +113,22 @@ fun TumbaNavigationDrawer(
                     onCloseDrawer()
                 }
             ) {
-                Box(
-                    modifier = Modifier
-                        .size(32.dp)
-                        .clip(RoundedCornerShape(8.dp))
-                        .background(colors.bgElevated),
-                    contentAlignment = Alignment.Center
-                ) {
-                    Text(
-                        text = "TN",
-                        fontWeight = FontWeight.Bold,
-                        fontSize = 13.sp,
-                        color = colors.textPrimary
-                    )
-                }
+                TumbaLogo(size = 38.dp, cornerRadius = 11.dp)
                 Spacer(modifier = Modifier.width(10.dp))
                 Column {
                     Text(
-                        text = "TUMBA NOTES",
-                        fontWeight = FontWeight.Bold,
-                        fontSize = 13.sp,
-                        letterSpacing = 1.sp,
+                        text = "TUMBA",
+                        fontWeight = FontWeight.Black,
+                        fontSize = 14.sp,
+                        letterSpacing = 2.4.sp,
                         color = colors.textPrimary
                     )
                     Text(
-                        text = "Graphite Local-First",
-                        fontSize = 10.sp,
-                        color = colors.textSecondary
+                        text = "NOTES",
+                        fontWeight = FontWeight.Medium,
+                        fontSize = 9.sp,
+                        letterSpacing = 4.sp,
+                        color = colors.accent
                     )
                 }
             }
@@ -160,7 +151,7 @@ fun TumbaNavigationDrawer(
                     .height(38.dp)
                     .testTag("drawer_new_note_button"),
                 colors = ButtonDefaults.buttonColors(
-                    containerColor = colors.textPrimary,
+                    containerColor = colors.accent,
                     contentColor = colors.bgMain
                 ),
                 shape = RoundedCornerShape(8.dp)
@@ -264,6 +255,17 @@ fun TumbaNavigationDrawer(
                 isSelected = currentSection == ViewSection.RECENT && selectedFolderId == null && selectedTagId == null,
                 onClick = {
                     onSelectSection(ViewSection.RECENT)
+                    onCloseDrawer()
+                }
+            )
+            DrawerNavItem(
+                label = strings.reminders,
+                icon = Icons.Default.NotificationsActive,
+                count = notes.count { !it.inTrash && (it.reminderAt ?: 0L) > System.currentTimeMillis() },
+                isSelected = currentSection == ViewSection.REMINDERS && selectedFolderId == null && selectedTagId == null,
+                iconTint = colors.accentWarm,
+                onClick = {
+                    onSelectSection(ViewSection.REMINDERS)
                     onCloseDrawer()
                 }
             )
@@ -502,12 +504,24 @@ private fun DrawerNavItem(
 ) {
     val colors = LocalTumbaColors.current
 
+    val rowShape = RoundedCornerShape(10.dp)
     Row(
         modifier = modifier
             .fillMaxWidth()
             .padding(horizontal = 8.dp, vertical = 2.dp)
-            .clip(RoundedCornerShape(6.dp))
-            .background(if (isSelected) colors.bgElevated else Color.Transparent)
+            .clip(rowShape)
+            .background(
+                if (isSelected) {
+                    Brush.horizontalGradient(
+                        listOf(
+                            (iconTint ?: colors.accent).copy(alpha = 0.20f),
+                            colors.accentSecondary.copy(alpha = 0.05f)
+                        )
+                    )
+                } else {
+                    Brush.horizontalGradient(listOf(Color.Transparent, Color.Transparent))
+                }
+            )
             .clickable(onClick = onClick)
             .padding(horizontal = 10.dp, vertical = 7.dp),
         verticalAlignment = Alignment.CenterVertically,
@@ -517,7 +531,7 @@ private fun DrawerNavItem(
             Icon(
                 imageVector = icon,
                 contentDescription = label,
-                tint = iconTint ?: if (isSelected) colors.textPrimary else colors.textMuted,
+                tint = iconTint ?: if (isSelected) colors.accent else colors.textMuted,
                 modifier = Modifier.size(17.dp)
             )
             Spacer(modifier = Modifier.width(10.dp))
@@ -533,7 +547,7 @@ private fun DrawerNavItem(
                 text = "$count",
                 fontSize = 10.sp,
                 fontFamily = FontFamily.Monospace,
-                color = colors.textMuted
+                color = if (isSelected) colors.accent else colors.textMuted
             )
         }
     }

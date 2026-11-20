@@ -310,22 +310,169 @@ class TumbaWysiwygState {
         onContentChange?.invoke(getContent())
     }
 
+    /** Plain text currently selected by the user (empty when the caret is collapsed). */
+    fun selectedText(): String {
+        val et = editText ?: return ""
+        val text = et.text ?: return ""
+        val start = min(et.selectionStart, et.selectionEnd)
+        val end = max(et.selectionStart, et.selectionEnd)
+        if (end <= start) return ""
+        return text.subSequence(start, end).toString()
+    }
+
+    /** Accepts "example.com" and turns it into "https://example.com". */
+    fun normalizeUrl(raw: String): String {
+        val trimmed = raw.trim()
+        if (trimmed.isEmpty()) return ""
+        return when {
+            trimmed.startsWith("http://", true) ||
+                trimmed.startsWith("https://", true) ||
+                trimmed.startsWith("mailto:", true) ||
+                trimmed.startsWith("tel:", true) ||
+                trimmed.startsWith("note://", true) -> trimmed
+            trimmed.startsWith("www.", true) -> "https://$trimmed"
+            else -> "https://$trimmed"
+        }
+    }
+
+    /** Updates the URL (and optionally the label) of the link under the caret. */
+    fun updateLinkAtSelection(url: String, newLabel: String?, accentColor: Int): Boolean {
+        val et = editText ?: return false
+        val text = et.text ?: return false
+        val start = min(et.selectionStart, et.selectionEnd)
+        val end = max(et.selectionStart, et.selectionEnd)
+        val spans = text.getSpans(start, end, URLSpan::class.java)
+            .ifEmpty { text.getSpans(start, start, URLSpan::class.java) }
+        val span = spans.firstOrNull() ?: return false
+        var s = text.getSpanStart(span).coerceAtLeast(0)
+        var e = text.getSpanEnd(span).coerceAtMost(text.length)
+        if (s >= e) return false
+
+        snapshotForUndo()
+        isUpdatingInternally = true
+        spans.forEach { text.removeSpan(it) }
+        text.getSpans(s, e, ForegroundColorSpan::class.java).forEach { text.removeSpan(it) }
+        text.getSpans(s, e, UnderlineSpan::class.java).forEach { text.removeSpan(it) }
+
+        if (!newLabel.isNullOrBlank()) {
+            text.replace(s, e, newLabel)
+            e = s + newLabel.length
+        }
+        text.setSpan(URLSpan(url), s, e, Spanned.SPAN_EXCLUSIVE_EXCLUSIVE)
+        text.setSpan(ForegroundColorSpan(accentColor), s, e, Spanned.SPAN_EXCLUSIVE_EXCLUSIVE)
+        text.setSpan(UnderlineSpan(), s, e, Spanned.SPAN_EXCLUSIVE_EXCLUSIVE)
+        et.setSelection(e)
+        isUpdatingInternally = false
+        onContentChange?.invoke(getContent())
+        return true
+    }
+
+    /** Existing link touching the caret or the current selection, if any. */
+    fun linkAtSelection(): Pair<String, String>? {
+        val et = editText ?: return null
+        val text = et.text ?: return null
+        val start = min(et.selectionStart, et.selectionEnd)
+        val end = max(et.selectionStart, et.selectionEnd)
+        val probe = if (start == end) start else start
+        val spans = text.getSpans(probe, probe.coerceAtLeast(probe), URLSpan::class.java)
+            .ifEmpty { text.getSpans(start, end, URLSpan::class.java) }
+        val span = spans.firstOrNull() ?: return null
+        val s = text.getSpanStart(span).coerceAtLeast(0)
+        val e = text.getSpanEnd(span).coerceAtMost(text.length)
+        if (s >= e) return null
+        return text.subSequence(s, e).toString() to span.url
+    }
+
+    /** Removes the link styling from the caret/selection without touching the text. */
+    fun removeLinkAtSelection(): Boolean {
+        val et = editText ?: return false
+        val text = et.text ?: return false
+        val start = min(et.selectionStart, et.selectionEnd)
+        val end = max(et.selectionStart, et.selectionEnd)
+        val spans = text.getSpans(start, end, URLSpan::class.java)
+            .ifEmpty { text.getSpans(start, start, URLSpan::class.java) }
+        if (spans.isEmpty()) return false
+
+        snapshotForUndo()
+        spans.forEach { span ->
+            val s = text.getSpanStart(span)
+            val e = text.getSpanEnd(span)
+            text.removeSpan(span)
+            // Drop the visual styling that belonged to the link itself.
+            text.getSpans(s.coerceAtLeast(0), e.coerceAtLeast(0), UnderlineSpan::class.java)
+                .forEach { underline ->
+                    if (text.getSpanStart(underline) >= s && text.getSpanEnd(underline) <= e) {
+                        text.removeSpan(underline)
+                    }
+                }
+        }
+        onContentChange?.invoke(getContent())
+        return true
+    }
+
+    /**
+     * Converts `[label](https://url)` into a clickable label as soon as the user types
+     * the trailing space, so no Markdown mode is ever needed. Cursor position, the
+     * already-typed space and normal editing keep working because the replacement maps
+     * 1:1 onto the visible label.
+     */
+    fun tryAutoConvertMarkdownLink(accentColor: Int): Boolean {
+        val et = editText ?: return false
+        if (et.selectionStart != et.selectionEnd) return false
+        val text = et.text ?: return false
+        val cursor = et.selectionStart
+        if (cursor < 4) return false
+        val trigger = text[cursor - 1]
+        if (trigger != ' ' && trigger != '\n') return false
+
+        val before = text.subSequence(0, cursor - 1).toString()
+        val lineStart = before.lastIndexOf('\n') + 1
+        val linePart = before.substring(lineStart)
+        val match = MARKDOWN_LINK_AT_END.find(linePart) ?: return false
+        val label = match.groupValues[1]
+        val url = match.groupValues[2]
+        if (label.isBlank()) return false
+
+        val replaceStart = lineStart + match.range.first
+        val replaceEnd = lineStart + match.range.last + 1
+
+        snapshotForUndo()
+        isUpdatingInternally = true
+        text.replace(replaceStart, replaceEnd, label)
+        val linkEnd = replaceStart + label.length
+        text.setSpan(URLSpan(url), replaceStart, linkEnd, Spanned.SPAN_EXCLUSIVE_EXCLUSIVE)
+        text.setSpan(ForegroundColorSpan(accentColor), replaceStart, linkEnd, Spanned.SPAN_EXCLUSIVE_EXCLUSIVE)
+        text.setSpan(UnderlineSpan(), replaceStart, linkEnd, Spanned.SPAN_EXCLUSIVE_EXCLUSIVE)
+        // Keep the typed trigger character after the label and place the caret after it.
+        val next = min(linkEnd + 1, text.length)
+        et.setSelection(next)
+        isUpdatingInternally = false
+        onContentChange?.invoke(getContent())
+        return true
+    }
+
+    companion object {
+        private val MARKDOWN_LINK_AT_END =
+            Regex("\\[([^\\[\\]\\n]+)\\]\\(((?:https?://|mailto:)[^\\s()]+)\\)$")
+    }
+
     fun insertLink(title: String, url: String, accentColor: Int) {
         val et = editText ?: return
         val text = et.text ?: return
         val start = min(et.selectionStart, et.selectionEnd)
         val end = max(et.selectionStart, et.selectionEnd)
 
+        val safeUrl = normalizeUrl(url)
         snapshotForUndo()
         if (start == end) {
             text.insert(start, title)
             val linkEnd = start + title.length
-            text.setSpan(URLSpan(url), start, linkEnd, Spanned.SPAN_EXCLUSIVE_EXCLUSIVE)
+            text.setSpan(URLSpan(safeUrl), start, linkEnd, Spanned.SPAN_EXCLUSIVE_EXCLUSIVE)
             text.setSpan(ForegroundColorSpan(accentColor), start, linkEnd, Spanned.SPAN_EXCLUSIVE_EXCLUSIVE)
             text.setSpan(UnderlineSpan(), start, linkEnd, Spanned.SPAN_EXCLUSIVE_EXCLUSIVE)
             et.setSelection(linkEnd)
         } else {
-            text.setSpan(URLSpan(url), start, end, Spanned.SPAN_EXCLUSIVE_EXCLUSIVE)
+            text.setSpan(URLSpan(safeUrl), start, end, Spanned.SPAN_EXCLUSIVE_EXCLUSIVE)
             text.setSpan(ForegroundColorSpan(accentColor), start, end, Spanned.SPAN_EXCLUSIVE_EXCLUSIVE)
             text.setSpan(UnderlineSpan(), start, end, Spanned.SPAN_EXCLUSIVE_EXCLUSIVE)
             et.setSelection(end)
@@ -424,6 +571,8 @@ fun TumbaWysiwygEditor(
                     override fun onTextChanged(s: CharSequence?, start: Int, before: Int, count: Int) {}
                     override fun afterTextChanged(s: Editable?) {
                         if (state.isUpdatingInternally) return
+                        // Typing "[Steam](https://...)" + space turns into a link instantly.
+                        if (state.tryAutoConvertMarkdownLink(accentColorInt)) return
                         state.onContentChange?.invoke(state.getContent())
                     }
                 })
@@ -451,35 +600,52 @@ class TumbaRichEditText(context: Context) : EditText(context) {
         onCheckboxTap = listener
     }
 
+    private var downX = 0f
+    private var downY = 0f
+    private var downAt = 0L
+
     override fun onTouchEvent(event: MotionEvent): Boolean {
-        if (event.action == MotionEvent.ACTION_UP) {
-            val x = event.x.toInt() - totalPaddingLeft + scrollX
-            val y = event.y.toInt() - totalPaddingTop + scrollY
+        when (event.action) {
+            MotionEvent.ACTION_DOWN -> {
+                downX = event.x
+                downY = event.y
+                downAt = System.currentTimeMillis()
+            }
+            MotionEvent.ACTION_UP -> {
+                // Only a genuine, short tap may activate a link: long presses and drags
+                // belong to text selection and must never launch the browser.
+                val moved = kotlin.math.abs(event.x - downX) + kotlin.math.abs(event.y - downY)
+                val isTap = moved < 24f && System.currentTimeMillis() - downAt < 450L
+                if (isTap && selectionStart == selectionEnd) {
+                    val x = event.x.toInt() - totalPaddingLeft + scrollX
+                    val y = event.y.toInt() - totalPaddingTop + scrollY
 
-            val line = layout?.getLineForVertical(y) ?: -1
-            if (line != -1 && layout != null) {
-                val off = layout?.getOffsetForHorizontal(line, x.toFloat()) ?: -1
-                val text = text
-                if (text != null && off in 0..text.length) {
-                    // Check if tapped on a link
-                    val urls = text.getSpans(off, off, URLSpan::class.java)
-                    if (urls.isNotEmpty()) {
-                        val url = urls[0].url
-                        if (url != null) {
-                            onLinkClickListener?.invoke(url)
-                            return true
-                        }
-                    }
+                    val line = layout?.getLineForVertical(y) ?: -1
+                    if (line != -1 && layout != null) {
+                        val off = layout?.getOffsetForHorizontal(line, x.toFloat()) ?: -1
+                        val text = text
+                        if (text != null && off in 0..text.length) {
+                            // Check if tapped on a link
+                            val urls = text.getSpans(off, off, URLSpan::class.java)
+                            if (urls.isNotEmpty()) {
+                                val url = urls[0].url
+                                if (url != null) {
+                                    onLinkClickListener?.invoke(url)
+                                    return true
+                                }
+                            }
 
-                    // Check if tapped on checkbox at start of line
-                    val lineStart = layout?.getLineStart(line) ?: 0
-                    if (off in lineStart..(lineStart + 3)) {
-                        val full = text.toString()
-                        if (full.startsWith(RichTextConverter.CHECKBOX_UNCHECKED, lineStart) ||
-                            full.startsWith(RichTextConverter.CHECKBOX_CHECKED, lineStart)
-                        ) {
-                            onCheckboxTap?.invoke(lineStart)
-                            return true
+                            // Check if tapped on checkbox at start of line
+                            val lineStart = layout?.getLineStart(line) ?: 0
+                            if (off in lineStart..(lineStart + 3)) {
+                                val full = text.toString()
+                                if (full.startsWith(RichTextConverter.CHECKBOX_UNCHECKED, lineStart) ||
+                                    full.startsWith(RichTextConverter.CHECKBOX_CHECKED, lineStart)
+                                ) {
+                                    onCheckboxTap?.invoke(lineStart)
+                                    return true
+                                }
+                            }
                         }
                     }
                 }
